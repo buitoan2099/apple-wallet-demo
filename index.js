@@ -128,18 +128,15 @@ app.get("/open-pass", (req, res) => {
     return res.status(400).send("Missing url parameter");
   }
 
-  // Validate chỉ cho phép link từ domain của mình
-  const allowedDomain = process.env.ALLOWED_DOMAIN || "your-domain.com";
+  // Chỉ check URL hợp lệ, không filter domain
+  let decodedUrl;
   try {
-    const parsed = new URL(url);
-    if (!parsed.hostname.includes(allowedDomain)) {
-      return res.status(403).send("Domain not allowed");
-    }
+    decodedUrl = decodeURIComponent(url);
+    new URL(decodedUrl); // Validate format
   } catch {
     return res.status(400).send("Invalid url");
   }
 
-  // Trả về HTML tự redirect sang file .pkpass
   res.setHeader("Content-Type", "text/html");
   res.send(`
     <!DOCTYPE html>
@@ -189,12 +186,11 @@ app.get("/open-pass", (req, res) => {
           <div class="icon">🎫</div>
           <h2>Thêm vào Apple Wallet</h2>
           <p>Nhấn nút bên dưới để thêm ưu đãi vào Wallet của bạn</p>
-          <a href="${url}">Mở Apple Wallet</a>
+          <a href="${decodedUrl}">Mở Apple Wallet</a>
         </div>
         <script>
-          // Tự động redirect sau 1 giây
           setTimeout(() => {
-            window.location.href = "${url}";
+            window.location.href = "${decodedUrl}";
           }, 1000);
         </script>
       </body>
