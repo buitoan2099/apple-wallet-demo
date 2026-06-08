@@ -267,7 +267,7 @@ app.get("/pass", async (req, res) => {
     const {
       code = "DEMO30",
       discount = "Giảm 30%",
-      expiry = "2025-12-31",
+      expiry = "2026-12-31",
       title = "Ưu đãi đặc biệt",
     } = req.query;
 
