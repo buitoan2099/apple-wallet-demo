@@ -185,7 +185,10 @@ app.get("/open-pass", (req, res) => {
         <div class="card">
           <div class="icon">🎫</div>
           <h2>Thêm vào Apple Wallet</h2>
-          <p>Nhấn nút bên dưới để thêm ưu đãi vào Wallet của bạn</p>
+          <p>
+            Vui lòng mở liên kết này bằng trình duyệt trên thiết bị Apple của bạn,
+            sau đó nhấn nút bên dưới để thêm ưu đãi vào Apple Wallet.
+          </p>
           <a href="${decodedUrl}">Mở Apple Wallet</a>
         </div>
         <script>
