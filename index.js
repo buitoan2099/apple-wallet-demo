@@ -132,7 +132,7 @@ app.get("/open-pass", (req, res) => {
   const allowedDomain = process.env.ALLOWED_DOMAIN || "your-domain.com";
   try {
     const parsed = new URL(url);
-    if (!parsed.hostname.endsWith(allowedDomain)) {
+    if (!parsed.hostname.includes(allowedDomain)) {
       return res.status(403).send("Domain not allowed");
     }
   } catch {
