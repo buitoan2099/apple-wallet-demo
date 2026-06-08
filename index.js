@@ -270,6 +270,8 @@ app.get("/pass", async (req, res) => {
       expiry = "2026-12-31",
       title = "Ưu đãi đặc biệt",
     } = req.query;
+    console.log("WEB_SERVICE_URL:", process.env.WEB_SERVICE_URL);
+    console.log("AUTH_TOKEN:", process.env.AUTH_TOKEN);
 
     const passJson = {
       formatVersion: 1,
