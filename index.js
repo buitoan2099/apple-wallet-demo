@@ -104,6 +104,11 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(express.json());
+
+// ✅ Lưu token tạm trong memory (sau này thay bằng DB)
+const tokenStore = {}; // { serialNumber: [{ deviceId, pushToken }] }
+
 function getCerts() {
   if (process.env.CERT_PEM) {
     return {
@@ -120,19 +125,77 @@ function getCerts() {
   };
 }
 
-// ✅ THÊM MỚI: Trang trung gian cho iOS/Zalo
+// ============================
+// ✅ APPLE WALLET WEBHOOKS
+// ============================
+
+// 1. Apple gọi cái này khi user lưu pass → nhận pushToken
+app.post(
+  "/v1/devices/:deviceId/registrations/:passTypeId/:serialNumber",
+  (req, res) => {
+    const { deviceId, serialNumber } = req.params;
+    const { pushToken } = req.body;
+
+    console.log(`✅ User lưu pass!`);
+    console.log(`   serialNumber: ${serialNumber}`);
+    console.log(`   deviceId: ${deviceId}`);
+    console.log(`   pushToken: ${pushToken}`);
+
+    // Lưu vào store
+    if (!tokenStore[serialNumber]) {
+      tokenStore[serialNumber] = [];
+    }
+    tokenStore[serialNumber].push({ deviceId, pushToken });
+
+    res.status(201).send();
+  },
+);
+
+// 2. Apple gọi khi user XÓA pass
+app.delete(
+  "/v1/devices/:deviceId/registrations/:passTypeId/:serialNumber",
+  (req, res) => {
+    const { deviceId, serialNumber } = req.params;
+
+    console.log(`❌ User xóa pass: ${serialNumber}`);
+
+    if (tokenStore[serialNumber]) {
+      tokenStore[serialNumber] = tokenStore[serialNumber].filter(
+        (t) => t.deviceId !== deviceId,
+      );
+    }
+
+    res.status(200).send();
+  },
+);
+
+// 3. Apple gọi để lấy pass mới nhất sau khi push
+app.get("/v1/passes/:passTypeId/:serialNumber", (req, res) => {
+  const { serialNumber } = req.params;
+  console.log(`📦 Apple fetch pass mới: ${serialNumber}`);
+
+  // Trả về pass mới nhất (tạm thời trả pass mặc định)
+  // Sau này query từ DB theo serialNumber
+  res.status(200).send(); // hoặc trả buffer pass mới
+});
+
+// 4. Xem toàn bộ token đang lưu (để debug)
+app.get("/debug/tokens", (req, res) => {
+  res.json(tokenStore);
+});
+
+// ============================
+// TRANG TRUNG GIAN
+// ============================
 app.get("/open-pass", (req, res) => {
   const { url } = req.query;
 
-  if (!url) {
-    return res.status(400).send("Missing url parameter");
-  }
+  if (!url) return res.status(400).send("Missing url parameter");
 
-  // Chỉ check URL hợp lệ, không filter domain
   let decodedUrl;
   try {
     decodedUrl = decodeURIComponent(url);
-    new URL(decodedUrl); // Validate format
+    new URL(decodedUrl);
   } catch {
     return res.status(400).send("Invalid url");
   }
@@ -185,22 +248,20 @@ app.get("/open-pass", (req, res) => {
         <div class="card">
           <div class="icon">🎫</div>
           <h2>Thêm vào Apple Wallet</h2>
-          <p>
-            Vui lòng mở liên kết này bằng trình duyệt trên thiết bị Apple của bạn,
-            sau đó nhấn nút bên dưới để thêm ưu đãi vào Apple Wallet.
-          </p>
+          <p>Nhấn nút bên dưới để thêm ưu đãi vào Wallet của bạn</p>
           <a href="${decodedUrl}">Mở Apple Wallet</a>
         </div>
         <script>
-          setTimeout(() => {
-            window.location.href = "${decodedUrl}";
-          }, 1000);
+          setTimeout(() => { window.location.href = "${decodedUrl}"; }, 1000);
         </script>
       </body>
     </html>
   `);
 });
 
+// ============================
+// TẠO PASS
+// ============================
 app.get("/pass", async (req, res) => {
   try {
     const {
@@ -213,7 +274,7 @@ app.get("/pass", async (req, res) => {
     const passJson = {
       formatVersion: 1,
       passTypeIdentifier: process.env.PASS_TYPE_ID,
-      serialNumber: `coupon-${code}-${Date.now()}`,
+      serialNumber: `coupon-${code}`, // ← bỏ Date.now() để serialNumber cố định
       teamIdentifier: process.env.TEAM_ID,
       organizationName: "BrandName",
       description: title,
@@ -221,6 +282,14 @@ app.get("/pass", async (req, res) => {
       foregroundColor: "rgb(255,255,255)",
       backgroundColor: "rgb(22,100,220)",
       labelColor: "rgb(200,220,255)",
+
+      // ✅ THÊM: để Apple biết gọi về đâu
+      webServiceURL: process.env.WEB_SERVICE_URL, // "https://your-domain.com"
+      authenticationToken: process.env.AUTH_TOKEN, // random string min 16 ký tự
+
+      // ✅ THÊM: hiện trên màn hình khóa theo ngày
+      relevantDate: `${expiry}T00:00:00+07:00`,
+
       coupon: {
         primaryFields: [{ key: "offer", label: "Ưu đãi", value: discount }],
         auxiliaryFields: [
